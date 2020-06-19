@@ -8,24 +8,20 @@
 namespace heroes {
 
 namespace textures {
-enum class Background { Grass };
-enum class Hero { HeroOnHorse };
-enum class Arrow {
-  Straight,
-  Turn45Left,
-  Turn45Right,
-  Turn90Left,
-  Turn90Right,
-  Turn135Left,
-  Turn135Right,
-  Stop
-};
+#define BEGIN_TEXTURES(TYPE) enum class TYPE {
+#define TEXTURE(TYPE, NAME) NAME
+#define NEXT_TEXTURE(TYPE, NAME1, NAME2) ,
+#define END_TEXTURES(TYPE)                                                     \
+  }                                                                            \
+  ;
+#include "Textures.inc"
+
 } // namespace textures
 
-using BackgroundTexturesHolder =
-    ResourceHolder<textures::Background, sf::Texture>;
-using HeroTexturesHolder = ResourceHolder<textures::Hero, sf::Texture>;
-using ArrowImageHolder = ResourceHolder<textures::Arrow, sf::Texture>;
+using BackgroundTextures = ResourceHolder<textures::Background, sf::Texture>;
+using HeroTextures = ResourceHolder<textures::Hero, sf::Texture>;
+using ArrowTextures = ResourceHolder<textures::Arrow, sf::Texture>;
+
 struct Tile : SceneNode {
   Tile(sf::Vector2i, const sf::Texture &);
   sf::Vector2i getPosition() const { return position_; }
@@ -52,9 +48,9 @@ private:
   sf::Vector2i determineTile(sf::Vector2i mousePosition) const;
 
 private:
-  static BackgroundTexturesHolder backgroundTexturesH_;
-  static HeroTexturesHolder heroTexturesH_;
-  static ArrowImageHolder arrowImageH_;
+  static BackgroundTextures BackgroundTexturesHolder_;
+  static HeroTextures HeroTexturesHolder_;
+  static ArrowTextures ArrowTexturesHolder_;
 
 private:
   void loadTextures();

@@ -7,9 +7,9 @@
 
 namespace heroes {
 
-BackgroundTexturesHolder World::backgroundTexturesH_;
-HeroTexturesHolder World::heroTexturesH_;
-ArrowImageHolder World::arrowImageH_;
+BackgroundTextures World::BackgroundTexturesHolder_;
+HeroTextures World::HeroTexturesHolder_;
+ArrowTextures World::ArrowTexturesHolder_;
 
 Tile::Tile(sf::Vector2i position, const sf::Texture &texture)
     : position_{position}, sprite_{texture} {}
@@ -89,6 +89,12 @@ sf::Vector2i World::determineTile(sf::Vector2i mousePosition) const {
 }
 
 void World::loadTextures() {
+#define TEXTURE(TYPE, NAME)                                                    \
+  TYPE##Textures##Holder_.load(textures::TYPE::NAME,                           \
+                               "../img/" #TYPE "/" #NAME ".png");
+#include "Textures.inc"
+#undef TEXTURE
+  /*
   backgroundTexturesH_.load(textures::Background::Grass, "../img/grass.jpg");
   heroTexturesH_.load(textures::Hero::HeroOnHorse, "../img/hero_on_horse.png");
   arrowImageH_.load(textures::Arrow::Straight,
@@ -102,6 +108,7 @@ void World::loadTextures() {
                     "../img/arrow/turn90_left_arrow.png");
   arrowImageH_.load(textures::Arrow::Turn90Right,
                     "../img/arrow/turn90_right_arrow.png");
+                    */
 }
 
 std::size_t World::toID(Layer layer) { return static_cast<std::size_t>(layer); }
@@ -177,12 +184,12 @@ void World::Path::Edge::initTexture(std::optional<sf::Vector2i> toPrevious,
   }
   sprite_.emplace();
   if (!toNext) {
-    sprite_->setTexture(arrowImageH_.get(textures::Arrow::Stop));
+    sprite_->setTexture(ArrowTexturesHolder_.get(textures::Arrow::Stop));
     return;
   }
 
-  sprite_->setTexture(
-      arrowImageH_.get(getIdentifier(toPrevious.value(), toNext.value())));
+  sprite_->setTexture(ArrowTexturesHolder_.get(
+      getIdentifier(toPrevious.value(), toNext.value())));
 }
 
 void World::Path::Edge::initTransforms(std::optional<sf::Vector2i> toPrevious,
@@ -273,7 +280,7 @@ void World::buildScene() {
     for (int x = 0; x < mapSize_.x; ++x) {
       auto btile = std::make_unique<Tile>(
           sf::Vector2i(x, y),
-          backgroundTexturesH_.get(textures::Background::Grass));
+          BackgroundTexturesHolder_.get(textures::Background::Grass));
       auto stile = std::make_unique<SceneNode>();
       if (x != 0) {
         btile->setPosition(sf::Vector2f(tileSize_, 0)),
@@ -295,7 +302,7 @@ void World::buildScene() {
     }
   }
   auto uniqHero = std::make_unique<Hero>(
-      sf::Vector2i(1, 3), heroTexturesH_.get(textures::Hero::HeroOnHorse));
+      sf::Vector2i(1, 3), HeroTexturesHolder_.get(textures::Hero::HeroOnHorse));
   hero_ = uniqHero.get();
   sceneTiles_[toID(sf::Vector2i(1, 3))]->attachChild(std::move(uniqHero));
 }
