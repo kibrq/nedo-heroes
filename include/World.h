@@ -16,6 +16,8 @@ enum class Arrow {
   Turn45Right,
   Turn90Left,
   Turn90Right,
+  Turn135Left,
+  Turn135Right,
   Stop
 };
 } // namespace textures
@@ -43,6 +45,7 @@ public:
   void draw() const;
   void update(sf::Time);
   void handleEvent(sf::Event &event);
+  void handleKeyboard();
 
 private:
   sf::Vector2i determineTile(int x, int y) const;
@@ -78,6 +81,7 @@ private:
     void clear();
     std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>>
     build(std::vector<sf::Vector2i> sPath);
+    std::optional<sf::Vector2i> getDestination() const;
 
   private:
     struct Edge : SceneNode {
@@ -85,12 +89,17 @@ private:
            std::optional<sf::Vector2i> further);
 
     private:
+      void initTexture(std::optional<sf::Vector2i> toPrevious,
+                       std::optional<sf::Vector2i> toNext);
+      void initTransforms(std::optional<sf::Vector2i> toPrevious,
+                          std::optional<sf::Vector2i> toNext);
       void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
 
     private:
-      sf::Sprite sprite_;
+      std::optional<sf::Sprite> sprite_;
     };
     std::vector<Edge *> edges_;
+    std::optional<sf::Vector2i> dest_;
   };
 
   Path path_;
@@ -104,7 +113,7 @@ private:
 private:
   sf::RenderWindow &window_;
   sf::IntRect bounds_;
-  sf::Vector2i mapSize_{10, 10};
+  sf::Vector2i mapSize_{10, 4};
   int tileSize_{100};
 };
 

@@ -1,5 +1,7 @@
 #include "World.h"
 #include "Hero.h"
+#include <cassert>
+#include <cmath>
 #include <iostream>
 #include <queue>
 
@@ -41,14 +43,42 @@ void World::handleEvent(sf::Event &event) {
   if (mouseButtonPressed)
     return;
 
-  path_.clear();
   auto pos = determineTile(event.mouseButton.x, event.mouseButton.y);
-  auto sceneNodes = path_.build(getShortestPath(sf::Vector2i(0, 0), pos));
+  bool moved = false;
+  if (auto dest = path_.getDestination(); dest.has_value() && *dest == pos) {
+    sceneTiles_[toID(pos)]->attachChild(hero_->detachFromParent());
+    hero_->setPosition(pos);
+    moved = true;
+  }
+  path_.clear();
+
+  if (moved)
+    return;
+
+  auto sceneNodes = path_.build(getShortestPath(hero_->getPosition(), pos));
 
   for (auto &pnode : sceneNodes) {
     sceneTiles_[toID(pnode.first)]->attachChild(std::move(pnode.second));
   }
 }
+
+#define KEYBOARD_ACTION(Key, Action)                                           \
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key)) {                         \
+    Action;                                                                    \
+  }
+
+void World::handleKeyboard() {
+  static float dscale = 1.005f;
+  static float dmove = 0.5f;
+  KEYBOARD_ACTION(Z, ({ root_.scale(sf::Vector2f(dscale, dscale)); }));
+  KEYBOARD_ACTION(C, ({ root_.scale(sf::Vector2f(1 / dscale, 1 / dscale)); }));
+  KEYBOARD_ACTION(Left, ({ root_.move(sf::Vector2f(-dmove, 0)); }));
+  KEYBOARD_ACTION(Right, ({ root_.move(sf::Vector2f(dmove, 0)); }));
+  KEYBOARD_ACTION(Down, ({ root_.move(sf::Vector2f(0, dmove)); }));
+  KEYBOARD_ACTION(Up, ({ root_.move(sf::Vector2f(0, -dmove)); }));
+}
+
+#undef KEYBOARD_ACTION
 
 sf::Vector2i World::determineTile(int x, int y) const {
   return determineTile(sf::Vector2i(x, y));
@@ -64,9 +94,9 @@ void World::loadTextures() {
   arrowImageH_.load(textures::Arrow::Straight,
                     "../img/arrow/straight_arrow.png");
   arrowImageH_.load(textures::Arrow::Stop, "../img/arrow/stop.png");
-  arrowImageH_.load(textures::Arrow::Turn45Left,
+  arrowImageH_.load(textures::Arrow::Turn135Left,
                     "../img/arrow/turn45_left_arrow.png");
-  arrowImageH_.load(textures::Arrow::Turn45Right,
+  arrowImageH_.load(textures::Arrow::Turn135Right,
                     "../img/arrow/turn45_right_arrow.png");
   arrowImageH_.load(textures::Arrow::Turn90Left,
                     "../img/arrow/turn90_left_arrow.png");
@@ -81,23 +111,96 @@ sf::Vector2i World::fromID(std::size_t id) {
   return sf::Vector2i(id % mapSize_.x, id / mapSize_.x);
 }
 
+namespace {
+float angleBetween(sf::Vector2i v1, sf::Vector2i v2) {
+  auto vecAbs = [](sf::Vector2i v) { return std::sqrt(v.x * v.x + v.y * v.y); };
+  float cs = ((v1.x * v2.x + v1.y * v2.y) / (vecAbs(v1) * vecAbs(v2)));
+  float sn = ((v1.x * v2.y - v1.y * v2.x) / (vecAbs(v1) * vecAbs(v2)));
+  if (cs >= 0 && sn >= 0) {
+    return std::acos(cs);
+  } else if (cs >= 0 && sn < 0) {
+    return std::asin(sn);
+  } else if (cs < 0 && sn >= 0) {
+    return std::acos(cs);
+  } else {
+    return -std::acos(cs);
+  }
+}
+
+float angleBetweenNorm(sf::Vector2i v) {
+  return angleBetween(sf::Vector2i(0, -1), v);
+}
+
+textures::Arrow getIdentifier(sf::Vector2i v1, sf::Vector2i v2) {
+  auto approx = [](float ethalon, float val) {
+    static float err = 0.5;
+    return ethalon - err <= val && val <= ethalon + err;
+  };
+  float angle = angleBetween(v1, v2) * 180 / M_PI;
+  bool left = angle >= 0;
+  angle = std::abs(angle);
+  if (approx(0, angle) || approx(180, angle)) {
+    return textures::Arrow::Straight;
+  } else if (approx(45, angle)) {
+    return left ? textures::Arrow::Turn45Left : textures::Arrow::Turn45Right;
+  } else if (approx(90, angle)) {
+    return left ? textures::Arrow::Turn90Left : textures::Arrow::Turn90Right;
+  } else if (approx(135, angle)) {
+    return left ? textures::Arrow::Turn135Left : textures::Arrow::Turn135Right;
+  } else {
+    assert(false && "unreacheable");
+  }
+}
+
+} // namespace
+
 // Path implementation
 World::Path::Edge::Edge(std::optional<sf::Vector2i> previous,
                         sf::Vector2i current,
                         std::optional<sf::Vector2i> further) {
-  if (!further) {
-    sprite_.setTexture(arrowImageH_.get(textures::Arrow::Stop));
-  } else {
-    sprite_.setTexture(arrowImageH_.get(textures::Arrow::Straight));
+  std::optional<sf::Vector2i> toPrevious, toNext;
+  if (previous) {
+    toPrevious.emplace(previous.value() - current);
   }
-  auto bounds = sprite_.getLocalBounds();
-  sprite_.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+  if (further) {
+    toNext.emplace(further.value() - current);
+  }
+  initTexture(toPrevious, toNext);
+  if (sprite_)
+    initTransforms(toPrevious, toNext);
+}
+
+void World::Path::Edge::initTexture(std::optional<sf::Vector2i> toPrevious,
+                                    std::optional<sf::Vector2i> toNext) {
+  if (!toPrevious) {
+    return;
+  }
+  sprite_.emplace();
+  if (!toNext) {
+    sprite_->setTexture(arrowImageH_.get(textures::Arrow::Stop));
+    return;
+  }
+
+  sprite_->setTexture(
+      arrowImageH_.get(getIdentifier(toPrevious.value(), toNext.value())));
+}
+
+void World::Path::Edge::initTransforms(std::optional<sf::Vector2i> toPrevious,
+                                       std::optional<sf::Vector2i> toNext) {
+  auto bounds = sprite_->getLocalBounds();
+  sprite_->setOrigin(bounds.width / 2.f, bounds.height / 2.f);
   move(sf::Vector2f(50.f, 50.f));
+  if (!toNext) {
+    return;
+  }
+  toPrevious.value() *= -1;
+  rotate(angleBetweenNorm(toPrevious.value()) * 180 / M_PI);
 }
 
 void World::Path::Edge::drawCurrent(sf::RenderTarget &target,
                                     sf::RenderStates states) const {
-  target.draw(sprite_, states);
+  if (sprite_)
+    target.draw(*sprite_, states);
 }
 
 void World::Path::clear() {
@@ -105,6 +208,7 @@ void World::Path::clear() {
     edge->detachFromParent();
   }
   edges_.clear();
+  dest_ = std::nullopt;
 }
 
 std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>>
@@ -120,7 +224,12 @@ World::Path::build(std::vector<sf::Vector2i> sPath) {
     edges_.push_back(edge.get());
     nodes.emplace_back(sPath[i], std::move(edge));
   }
+  dest_ = sPath.back();
   return nodes;
+}
+
+std::optional<sf::Vector2i> World::Path::getDestination() const {
+  return dest_;
 }
 
 std::vector<sf::Vector2i> World::getShortestPath(sf::Vector2i start,
@@ -185,6 +294,10 @@ void World::buildScene() {
       sceneTiles_.push_back(cur.second);
     }
   }
+  auto uniqHero = std::make_unique<Hero>(
+      sf::Vector2i(1, 3), heroTexturesH_.get(textures::Hero::HeroOnHorse));
+  hero_ = uniqHero.get();
+  sceneTiles_[toID(sf::Vector2i(1, 3))]->attachChild(std::move(uniqHero));
 }
 
 void World::buildGraph() {
@@ -195,7 +308,7 @@ void World::buildGraph() {
   mapGraph_.resize(mapSize_.x * mapSize_.y);
   for (int y = 0; y < mapSize_.y; ++y) {
     for (int x = 0; x < mapSize_.x; ++x, ++id) {
-      for (int dy = -1; dy <= 1; ++dy) {
+      for (int dy = 1; dy >= -1; --dy) {
         for (int dx = -1; dx <= 1; ++dx) {
           if (isInRange(0, mapSize_.x, x + dx) &&
               isInRange(0, mapSize_.y, y + dy)) {

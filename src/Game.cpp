@@ -17,6 +17,7 @@ void Game::play() {
       }
     }
     world_->handleEvent(event);
+    world_->handleKeyboard();
     window_.clear();
     world_->update(sf::milliseconds(100));
     world_->draw();

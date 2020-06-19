@@ -10,12 +10,12 @@ void SceneNode::attachChild(std::unique_ptr<SceneNode> node) {
 }
 
 std::unique_ptr<SceneNode> SceneNode::detachChild(const SceneNode &node) {
-  auto iter = std::remove_if(
+  auto iter = std::find_if(
       children_.begin(), children_.end(),
       [&node](const auto &nodePtr) { return nodePtr.get() == &node; });
-  std::unique_ptr<SceneNode> detached = std::move(children_.back());
+  std::unique_ptr<SceneNode> detached = std::move(*iter);
   detached->parent_ = nullptr;
-  children_.pop_back();
+  children_.erase(iter);
   return std::move(detached);
 }
 
