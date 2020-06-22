@@ -5,6 +5,8 @@
 
 namespace heroes {
 
+class Hero;
+
 class Hero : public SceneNode {
 public:
   Hero(sf::Vector2i pos, const sf::Texture &texture);
@@ -13,6 +15,7 @@ public:
 
 private:
   void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
+  void updateCurrent(sf::Time dt) override;
 
 private:
   sf::Vector2i position_;

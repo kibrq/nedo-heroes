@@ -3,6 +3,7 @@
 #include "ResourceHolder.hpp"
 #include "SceneNode.h"
 #include <SFML/Graphics.hpp>
+#include <deque>
 #include <unordered_map>
 
 namespace heroes {
@@ -35,6 +36,7 @@ private:
 };
 
 class Hero;
+
 class World {
 public:
   World(sf::RenderWindow &window, sf::IntRect rect);
@@ -76,8 +78,11 @@ private:
   struct Path {
     void clear();
     std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>>
-    build(std::vector<sf::Vector2i> sPath);
+    build(const std::vector<sf::Vector2i> &sPath);
     std::optional<sf::Vector2i> getDestination() const;
+    std::pair<sf::Vector2i, SceneNode *> front() const;
+    void pop();
+    bool empty() const;
 
   private:
     struct Edge : SceneNode {
@@ -94,11 +99,26 @@ private:
     private:
       std::optional<sf::Sprite> sprite_;
     };
-    std::vector<Edge *> edges_;
-    std::optional<sf::Vector2i> dest_;
+    std::deque<sf::Vector2i> route_;
+    std::deque<Edge *> edges_;
   };
 
-  Path path_;
+  std::unique_ptr<Path> path_;
+
+private:
+  struct HeroMovingAnimation : SceneAnimation {
+    HeroMovingAnimation(std::unique_ptr<Path> path, Hero *hero);
+
+  private:
+    void updateCurrent(sf::Time dt) override;
+
+  private:
+    sf::Time stored_;
+
+  private:
+    std::unique_ptr<Path> path_;
+    Hero *hero_;
+  };
 
 private:
   void buildGraph();
@@ -109,7 +129,7 @@ private:
 private:
   sf::RenderWindow &window_;
   sf::IntRect bounds_;
-  sf::Vector2i mapSize_{10, 4};
+  sf::Vector2i mapSize_{12, 6};
   int tileSize_{100};
 };
 

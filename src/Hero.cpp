@@ -13,4 +13,6 @@ void Hero::drawCurrent(sf::RenderTarget &target,
   target.draw(sprite_, states);
 }
 
+void Hero::updateCurrent(sf::Time dt) {}
+
 } // namespace heroes

@@ -4,7 +4,7 @@
 namespace heroes {
 
 Game::Game()
-    : window_(sf::VideoMode(1000, 500), "heroes"),
+    : window_(sf::VideoMode(1500, 750), "heroes"),
       world_(std::make_unique<World>(window_, sf::IntRect{})) {}
 Game::~Game() = default;
 

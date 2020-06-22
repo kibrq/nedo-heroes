@@ -45,17 +45,26 @@ void World::handleEvent(sf::Event &event) {
 
   auto pos = determineTile(event.mouseButton.x, event.mouseButton.y);
   bool moved = false;
-  if (auto dest = path_.getDestination(); dest.has_value() && *dest == pos) {
-    sceneTiles_[toID(pos)]->attachChild(hero_->detachFromParent());
-    hero_->setPosition(pos);
-    moved = true;
+  if (path_) {
+    if (auto dest = path_->getDestination(); dest.has_value() && *dest == pos) {
+      moved = true;
+      auto anim =
+          std::make_unique<HeroMovingAnimation>(std::move(path_), hero_);
+      path_ = nullptr;
+      root_.attachChild(std::move(anim));
+    }
   }
-  path_.clear();
 
   if (moved)
     return;
 
-  auto sceneNodes = path_.build(getShortestPath(hero_->getPosition(), pos));
+  if (!path_) {
+    path_ = std::make_unique<Path>();
+  } else {
+    path_->clear();
+  }
+
+  auto sceneNodes = path_->build(getShortestPath(hero_->getPosition(), pos));
 
   for (auto &pnode : sceneNodes) {
     sceneTiles_[toID(pnode.first)]->attachChild(std::move(pnode.second));
@@ -94,21 +103,6 @@ void World::loadTextures() {
                                "../img/" #TYPE "/" #NAME ".png");
 #include "Textures.inc"
 #undef TEXTURE
-  /*
-  backgroundTexturesH_.load(textures::Background::Grass, "../img/grass.jpg");
-  heroTexturesH_.load(textures::Hero::HeroOnHorse, "../img/hero_on_horse.png");
-  arrowImageH_.load(textures::Arrow::Straight,
-                    "../img/arrow/straight_arrow.png");
-  arrowImageH_.load(textures::Arrow::Stop, "../img/arrow/stop.png");
-  arrowImageH_.load(textures::Arrow::Turn135Left,
-                    "../img/arrow/turn45_left_arrow.png");
-  arrowImageH_.load(textures::Arrow::Turn135Right,
-                    "../img/arrow/turn45_right_arrow.png");
-  arrowImageH_.load(textures::Arrow::Turn90Left,
-                    "../img/arrow/turn90_left_arrow.png");
-  arrowImageH_.load(textures::Arrow::Turn90Right,
-                    "../img/arrow/turn90_right_arrow.png");
-                    */
 }
 
 std::size_t World::toID(Layer layer) { return static_cast<std::size_t>(layer); }
@@ -215,11 +209,11 @@ void World::Path::clear() {
     edge->detachFromParent();
   }
   edges_.clear();
-  dest_ = std::nullopt;
+  route_.clear();
 }
 
 std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>>
-World::Path::build(std::vector<sf::Vector2i> sPath) {
+World::Path::build(const std::vector<sf::Vector2i> &sPath) {
   std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>> nodes;
   for (std::size_t i = 0, size = sPath.size(); i < size; ++i) {
     std::optional<sf::Vector2i> previous, further;
@@ -229,14 +223,47 @@ World::Path::build(std::vector<sf::Vector2i> sPath) {
       further.emplace(sPath[i + 1]);
     auto edge = std::make_unique<Edge>(previous, sPath[i], further);
     edges_.push_back(edge.get());
+    route_.push_back(sPath[i]);
     nodes.emplace_back(sPath[i], std::move(edge));
   }
-  dest_ = sPath.back();
   return nodes;
 }
 
 std::optional<sf::Vector2i> World::Path::getDestination() const {
-  return dest_;
+  return route_.empty() ? std::optional<sf::Vector2i>{} : route_.back();
+}
+
+std::pair<sf::Vector2i, SceneNode *> World::Path::front() const {
+  return {route_.front(), edges_.front()};
+}
+
+void World::Path::pop() {
+  route_.pop_front();
+  edges_.front()->detachFromParent();
+  edges_.pop_front();
+}
+
+bool World::Path::empty() const { return edges_.empty(); }
+
+World::HeroMovingAnimation::HeroMovingAnimation(std::unique_ptr<Path> path,
+                                                Hero *hero)
+    : path_{std::move(path)}, hero_{hero} {}
+
+void World::HeroMovingAnimation::updateCurrent(sf::Time dt) {
+  stored_ += dt;
+  if (stored_.asMilliseconds() < 5000) {
+    return;
+  }
+  stored_ = sf::seconds(0.f);
+  if (path_->empty()) {
+    detachFromParent();
+    return;
+  }
+  sf::Vector2i nextPosition = path_->front().first;
+  SceneNode *tile = path_->front().second->getParent();
+  path_->pop();
+  tile->attachChild(hero_->detachFromParent());
+  hero_->setPosition(nextPosition);
 }
 
 std::vector<sf::Vector2i> World::getShortestPath(sf::Vector2i start,
@@ -280,7 +307,9 @@ void World::buildScene() {
     for (int x = 0; x < mapSize_.x; ++x) {
       auto btile = std::make_unique<Tile>(
           sf::Vector2i(x, y),
-          BackgroundTexturesHolder_.get(textures::Background::Grass));
+          BackgroundTexturesHolder_.get(rand() % 2 == 0
+                                            ? textures::Background::Grass1
+                                            : textures::Background::Grass));
       auto stile = std::make_unique<SceneNode>();
       if (x != 0) {
         btile->setPosition(sf::Vector2f(tileSize_, 0)),

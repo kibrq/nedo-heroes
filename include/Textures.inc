@@ -13,6 +13,8 @@
 
 BEGIN_TEXTURES(Background)
 TEXTURE(Background, Grass)
+NEXT_TEXTURE(Background, Grass, Grass1)
+TEXTURE(Background, Grass1)
 END_TEXTURES(Background)
 
 BEGIN_TEXTURES(Hero)

@@ -23,6 +23,8 @@ std::unique_ptr<SceneNode> SceneNode::detachFromParent() {
   return parent_->detachChild(*this);
 }
 
+SceneNode *SceneNode::getParent() const { return parent_; }
+
 void SceneNode::draw(sf::RenderTarget &target, sf::RenderStates states) const {
   states.transform *= getTransform();
   drawCurrent(target, states);

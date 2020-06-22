@@ -14,6 +14,8 @@ struct SceneNode : public sf::Transformable,
   std::unique_ptr<SceneNode> detachChild(const SceneNode &);
   std::unique_ptr<SceneNode> detachFromParent();
 
+  SceneNode *getParent() const;
+
   void update(sf::Time dt);
 
 private:
@@ -27,5 +29,15 @@ protected:
 private:
   std::vector<std::unique_ptr<SceneNode>> children_;
   SceneNode *parent_{nullptr};
+};
+
+struct SceneAnimation : SceneNode {
+  SceneAnimation() = default;
+
+private:
+  void drawCurrent(sf::RenderTarget &target,
+                   sf::RenderStates states) const override final {}
+  using SceneNode::attachChild;
+  using SceneNode::detachChild;
 };
 } // namespace heroes
