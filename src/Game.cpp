@@ -1,11 +1,11 @@
 #include "Game.h"
-#include "World.h"
+#include "MainGamePanel.h"
 
 namespace heroes {
 
-Game::Game()
-    : window_(sf::VideoMode(1500, 750), "heroes"),
-      world_(std::make_unique<World>(window_, sf::IntRect{})) {}
+Game::Game() : window_(sf::VideoMode(1500, 750), "heroes") {
+  panels_.emplace_back(std::make_unique<MainGamePanel>(1500, 750));
+}
 Game::~Game() = default;
 
 void Game::play() {
@@ -16,11 +16,15 @@ void Game::play() {
         window_.close();
       }
     }
-    world_->handleEvent(event);
-    world_->handleKeyboard();
     window_.clear();
-    world_->update(sf::milliseconds(100));
-    world_->draw();
+    for (auto &panel : panels_) {
+      panel->update(sf::milliseconds(100));
+    }
+    for (auto &panel : panels_) {
+      window_.draw(*panel);
+    }
+    panels_.back()->handleKeyboard();
+    panels_.back()->handleEvent(event);
     window_.display();
   }
 }

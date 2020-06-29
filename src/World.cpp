@@ -1,5 +1,6 @@
 #include "World.h"
 #include "Hero.h"
+#include "LandscapeObject.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -7,9 +8,9 @@
 
 namespace heroes {
 
-BackgroundTextures World::BackgroundTexturesHolder_;
-HeroTextures World::HeroTexturesHolder_;
-ArrowTextures World::ArrowTexturesHolder_;
+#define BEGIN_TEXTURES(TYPE) TYPE##Textures World::TYPE##TexturesHolder_;
+#include "Textures.inc"
+#undef BEGIN_TEXTURES
 
 Tile::Tile(sf::Vector2i position, const sf::Texture &texture)
     : position_{position}, sprite_{texture} {}
@@ -19,16 +20,18 @@ void Tile::drawCurrent(sf::RenderTarget &target,
   target.draw(sprite_, states);
 }
 
-World::World(sf::RenderWindow &window, sf::IntRect rect)
-    : window_{window}, bounds_{rect} {
+World::World(int width, int height) : World(sf::Vector2i(width, height)) {}
+World::World(sf::Vector2i size) : size_{size} {
   loadTextures();
   buildScene();
   buildGraph();
 }
 
-void World::draw() const { window_.draw(root_); }
+void World::draw(sf::RenderTarget &target, sf::RenderStates states) const {
+  target.draw(root_, states);
+}
 void World::update(sf::Time dt) { root_.update(dt); }
-void World::handleEvent(sf::Event &event) {
+void World::handleEvent(sf::Event &event, sf::Vector2i absPos) {
   static bool mouseButtonPressed = false;
   if (event.type != sf::Event::MouseButtonPressed &&
       event.type != sf::Event::MouseButtonReleased)
@@ -43,7 +46,9 @@ void World::handleEvent(sf::Event &event) {
   if (mouseButtonPressed)
     return;
 
-  auto pos = determineTile(event.mouseButton.x, event.mouseButton.y);
+  auto pos = determineTile(static_cast<float>(event.mouseButton.x - absPos.x),
+                           static_cast<float>(event.mouseButton.y - absPos.y));
+
   bool moved = false;
   if (path_) {
     if (auto dest = path_->getDestination(); dest.has_value() && *dest == pos) {
@@ -89,18 +94,19 @@ void World::handleKeyboard() {
 
 #undef KEYBOARD_ACTION
 
-sf::Vector2i World::determineTile(int x, int y) const {
-  return determineTile(sf::Vector2i(x, y));
+sf::Vector2i World::determineTile(float x, float y) const {
+  return determineTile(sf::Vector2f(x, y));
 }
 
-sf::Vector2i World::determineTile(sf::Vector2i mousePosition) const {
-  return mousePosition /= tileSize_;
+sf::Vector2i World::determineTile(sf::Vector2f mousePosition) const {
+  mousePosition -= root_.getPosition(), mousePosition /= root_.getScale().x;
+  return sf::Vector2i(mousePosition /= static_cast<float>(tileSize_));
 }
 
 void World::loadTextures() {
 #define TEXTURE(TYPE, NAME)                                                    \
-  TYPE##Textures##Holder_.load(textures::TYPE::NAME,                           \
-                               "../img/" #TYPE "/" #NAME ".png");
+  TYPE##TexturesHolder_.load(textures::TYPE::NAME,                             \
+                             "../img/" #TYPE "/" #NAME ".png");
 #include "Textures.inc"
 #undef TEXTURE
 }
@@ -330,6 +336,10 @@ void World::buildScene() {
       sceneTiles_.push_back(cur.second);
     }
   }
+  auto wood = std::make_unique<ResourceGainer>(
+      sf::Vector2i(8, 5), LandscapeObjectsTexturesHolder_.get(
+                              textures::LandscapeObjects::WoodGainer));
+  sceneTiles_[toID(sf::Vector2i(8, 5))]->attachChild(std::move(wood));
   auto uniqHero = std::make_unique<Hero>(
       sf::Vector2i(1, 3), HeroTexturesHolder_.get(textures::Hero::HeroOnHorse));
   hero_ = uniqHero.get();

@@ -5,7 +5,7 @@
 
 namespace heroes {
 
-class World;
+struct Panel;
 
 class Game {
 public:
@@ -15,6 +15,6 @@ public:
 
 private:
   sf::RenderWindow window_;
-  std::unique_ptr<World> world_;
+  std::vector<std::unique_ptr<Panel>> panels_;
 };
 } // namespace heroes

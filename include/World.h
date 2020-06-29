@@ -2,26 +2,16 @@
 
 #include "ResourceHolder.hpp"
 #include "SceneNode.h"
+#include "Textures.h"
 #include <SFML/Graphics.hpp>
 #include <deque>
 #include <unordered_map>
 
 namespace heroes {
-
-namespace textures {
-#define BEGIN_TEXTURES(TYPE) enum class TYPE {
-#define TEXTURE(TYPE, NAME) NAME
-#define NEXT_TEXTURE(TYPE, NAME1, NAME2) ,
-#define END_TEXTURES(TYPE)                                                     \
-  }                                                                            \
-  ;
+#define BEGIN_TEXTURES(TYPE)                                                   \
+  using TYPE##Textures = ResourceHolder<textures::TYPE, sf::Texture>;
 #include "Textures.inc"
-
-} // namespace textures
-
-using BackgroundTextures = ResourceHolder<textures::Background, sf::Texture>;
-using HeroTextures = ResourceHolder<textures::Hero, sf::Texture>;
-using ArrowTextures = ResourceHolder<textures::Arrow, sf::Texture>;
+#undef BEGIN_TEXTURES
 
 struct Tile : SceneNode {
   Tile(sf::Vector2i, const sf::Texture &);
@@ -37,22 +27,27 @@ private:
 
 class Hero;
 
-class World {
+class World : public sf::Drawable {
 public:
-  World(sf::RenderWindow &window, sf::IntRect rect);
-  void draw() const;
+  World(int width, int height);
+  World(sf::Vector2i size);
+
+private:
+  void draw(sf::RenderTarget &target, sf::RenderStates states) const override;
+
+public:
   void update(sf::Time);
-  void handleEvent(sf::Event &event);
+  void handleEvent(sf::Event &event, sf::Vector2i absPos);
   void handleKeyboard();
 
 private:
-  sf::Vector2i determineTile(int x, int y) const;
-  sf::Vector2i determineTile(sf::Vector2i mousePosition) const;
+  sf::Vector2i determineTile(float x, float y) const;
+  sf::Vector2i determineTile(sf::Vector2f mousePosition) const;
 
 private:
-  static BackgroundTextures BackgroundTexturesHolder_;
-  static HeroTextures HeroTexturesHolder_;
-  static ArrowTextures ArrowTexturesHolder_;
+#define BEGIN_TEXTURES(TYPE) static TYPE##Textures TYPE##TexturesHolder_;
+#include "Textures.inc"
+#undef BEGIN_TEXTURES
 
 private:
   void loadTextures();
@@ -127,8 +122,7 @@ private:
                                             sf::Vector2i target);
 
 private:
-  sf::RenderWindow &window_;
-  sf::IntRect bounds_;
+  sf::Vector2i size_;
   sf::Vector2i mapSize_{12, 6};
   int tileSize_{100};
 };

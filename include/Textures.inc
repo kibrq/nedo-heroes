@@ -2,7 +2,7 @@
   #define BEGIN_TEXTURES(TYPE)
 #endif
 #ifndef TEXTURE
-  #define TEXTURE(TYPE, NAME) NAME
+  #define TEXTURE(TYPE, NAME)
 #endif
 #ifndef NEXT_TEXTURE
   #define NEXT_TEXTURE(TYPE, NAME1, NAME2)
@@ -16,6 +16,10 @@ TEXTURE(Background, Grass)
 NEXT_TEXTURE(Background, Grass, Grass1)
 TEXTURE(Background, Grass1)
 END_TEXTURES(Background)
+
+BEGIN_TEXTURES(LandscapeObjects)
+TEXTURE(LandscapeObjects, WoodGainer)
+END_TEXTURES(LandscapeObjects)
 
 BEGIN_TEXTURES(Hero)
 TEXTURE(Hero, HeroOnHorse)
