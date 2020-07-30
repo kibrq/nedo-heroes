@@ -1,6 +1,3 @@
-#include "Game.h"
+#include "Window.h"
 
-int main() {
-  heroes::Game game{};
-  game.play();
-}
+int main() { heroes::Window().play(); }

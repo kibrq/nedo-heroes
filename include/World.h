@@ -1,130 +1,123 @@
 #pragma once
 
-#include "ResourceHolder.hpp"
-#include "SceneNode.h"
-#include "Textures.h"
+#include "AbstractCore.h"
 #include <SFML/Graphics.hpp>
 #include <deque>
 #include <unordered_map>
 
 namespace heroes {
-#define BEGIN_TEXTURES(TYPE)                                                   \
-  using TYPE##Textures = ResourceHolder<textures::TYPE, sf::Texture>;
-#include "Textures.inc"
-#undef BEGIN_TEXTURES
 
-struct Tile : SceneNode {
-  Tile(sf::Vector2i, const sf::Texture &);
-  sf::Vector2i getPosition() const { return position_; }
+constexpr int ethalonDistance{100};
 
-private:
-  void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
-
-private:
-  sf::Vector2i position_;
-  sf::Sprite sprite_;
-};
-
+class World;
+class Player;
 class Hero;
 
-class World : public sf::Drawable {
+struct SimpleEntity : SceneNode {
+  SimpleEntity(sf::Vector2i loaction);
+  sf::Vector2i getLocation() const;
+  void setLocation(sf::Vector2i);
+
+protected:
+  sf::Vector2i location_;
+};
+
+struct Entity : SimpleEntity {
+  Entity(sf::Vector2i location, World &world);
+
+protected:
+  World &world_;
+};
+
+class World final : public SceneNode {
+
+private:
+  struct Tile : Entity {
+    Tile(const sf::Texture &texture, sf::Vector2i loc, World &world);
+
+  private:
+    void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
+
+  private:
+    sf::Sprite sprite_;
+  };
+
 public:
-  World(int width, int height);
-  World(sf::Vector2i size);
+  World();
+  ~World();
 
 private:
-  void draw(sf::RenderTarget &target, sf::RenderStates states) const override;
+  void buildScene();
 
-public:
-  void update(sf::Time);
-  void handleEvent(sf::Event &event, sf::Vector2i absPos);
-  void handleKeyboard();
-
-private:
-  sf::Vector2i determineTile(float x, float y) const;
-  sf::Vector2i determineTile(sf::Vector2f mousePosition) const;
-
-private:
-#define BEGIN_TEXTURES(TYPE) static TYPE##Textures TYPE##TexturesHolder_;
-#include "Textures.inc"
-#undef BEGIN_TEXTURES
-
-private:
-  void loadTextures();
-
-private:
   enum class Layer : std::size_t { Background = 0, Surface = 1, Count = 2 };
+  std::size_t fromLayer(Layer);
+  Layer toLayer(std::size_t);
   std::vector<SceneNode *> layers_;
-  std::vector<SceneNode *> sceneTiles_;
-  std::vector<Tile *> tiles_;
-  std::size_t toID(Layer layer);
+
   std::size_t toID(sf::Vector2i vec);
   std::size_t toID(int x, int y);
   sf::Vector2i fromID(std::size_t);
 
-private:
-  SceneNode root_;
-  void buildScene();
+  std::vector<SceneNode *> sceneTiles_;
+  std::vector<Tile *> tiles_;
 
-private:
-  Hero *hero_;
+  sf::Vector2i mapSize_{12, 6};
 
-private:
-  struct Path {
-    void clear();
-    std::vector<std::pair<sf::Vector2i, std::unique_ptr<SceneNode>>>
-    build(const std::vector<sf::Vector2i> &sPath);
-    std::optional<sf::Vector2i> getDestination() const;
-    std::pair<sf::Vector2i, SceneNode *> front() const;
-    void pop();
-    bool empty() const;
-
-  private:
-    struct Edge : SceneNode {
-      Edge(std::optional<sf::Vector2i> previous, sf::Vector2i current,
-           std::optional<sf::Vector2i> further);
-
-    private:
-      void initTexture(std::optional<sf::Vector2i> toPrevious,
-                       std::optional<sf::Vector2i> toNext);
-      void initTransforms(std::optional<sf::Vector2i> toPrevious,
-                          std::optional<sf::Vector2i> toNext);
-      void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
-
-    private:
-      std::optional<sf::Sprite> sprite_;
-    };
-    std::deque<sf::Vector2i> route_;
-    std::deque<Edge *> edges_;
-  };
-
-  std::unique_ptr<Path> path_;
-
-private:
-  struct HeroMovingAnimation : SceneAnimation {
-    HeroMovingAnimation(std::unique_ptr<Path> path, Hero *hero);
-
-  private:
-    void updateCurrent(sf::Time dt) override;
-
-  private:
-    sf::Time stored_;
-
-  private:
-    std::unique_ptr<Path> path_;
-    Hero *hero_;
-  };
-
-private:
   void buildGraph();
   std::vector<std::vector<std::size_t>> mapGraph_;
-  std::vector<sf::Vector2i> getShortestPath(sf::Vector2i start,
-                                            sf::Vector2i target);
+
+public:
+  std::deque<sf::Vector2i> getShortestPath(sf::Vector2i start,
+                                           sf::Vector2i target);
 
 private:
-  sf::Vector2i size_;
-  sf::Vector2i mapSize_{12, 6};
-  int tileSize_{100};
+  void updateCurrent(sf::Time dt) override;
+
+private:
+  std::vector<std::unique_ptr<Player>> players_;
+  std::size_t currentPlayerNum_{0};
+  Hero *choosenHero_{nullptr};
+
+public:
+  CommandQueue &getCommandQueue();
+
+private:
+  CommandQueue commands_;
+
+public:
+  void nextTurn();
+  void addNode(std::unique_ptr<SceneNode>, sf::Vector2i position);
+  void forceAddNode(std::unique_ptr<SceneNode>, sf::Vector2i position);
+  void removeNode(const SceneNode *, sf::Vector2i position);
+  std::unique_ptr<SceneNode> forceRemoveNode(const SceneNode *,
+                                             sf::Vector2i position);
+  void moveHero(Hero *hero, sf::Vector2i newPosition);
+
+public:
+  void handleLeftClick(sf::Vector2i position);
+  void handleRightPress(sf::Vector2i position);
+  void handleRightRelease(sf::Vector2i position);
+};
+
+struct WorldWrapperPanel final : public Panel {
+  WorldWrapperPanel(int width, int height);
+  WorldWrapperPanel(sf::Vector2i size);
+
+private:
+  void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
+  void updateCurrent(sf::Time dt) override;
+
+private:
+  bool handleMouseButtonClickedCurrent(sf::Mouse::Button,
+                                       sf::Vector2i position) override;
+  bool handleKeyPressedCurrent(sf::Keyboard::Key) override;
+  bool handleKeyClickedCurrent(sf::Keyboard::Key) override;
+
+private:
+  sf::Vector2i normalizeVector(sf::Vector2i) const;
+
+private:
+  World world_;
 };
 
 } // namespace heroes

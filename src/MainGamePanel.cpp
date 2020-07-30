@@ -1,52 +1,29 @@
 #include "MainGamePanel.h"
-#include <iostream>
+#include "Logger.hpp"
+#include <cassert>
 
 namespace heroes {
-HelperGamePanel::HelperGamePanel(sf::Vector2i size, Panel *parent)
-    : Panel(size, parent) {}
+GameInfoPanel::GameInfoPanel(sf::Vector2i size)
+    : GameInfoPanel(size.x, size.y) {}
 
-void HelperGamePanel::drawCurrent(sf::RenderTarget &target,
-                                  sf::RenderStates states) const {
-  target.draw(*world_, states);
-}
-
-void HelperGamePanel::handleEventCurrent(sf::Event &event) {
-  world_->handleEvent(event, getAbsolutePosition());
-}
-
-void HelperGamePanel::handleKeyboardCurrent() { world_->handleKeyboard(); }
-
-void HelperGamePanel::updateCurrent(sf::Time dt) { world_->update(dt); }
-
-GameInfoPanel::GameInfoPanel(sf::Vector2i size, Panel *parent)
-    : Panel(size, parent) {
-  button_.setRadius(100);
-  button_.setFillColor(sf::Color::Red);
-  background_.setSize(sf::Vector2<float>(size_));
-  background_.setFillColor(sf::Color::Yellow);
-}
+GameInfoPanel::GameInfoPanel(int width, int height) : Panel(width, height) {}
 
 void GameInfoPanel::drawCurrent(sf::RenderTarget &target,
-                                sf::RenderStates states) const {
-  target.draw(background_, states);
-  target.draw(button_, states);
-}
+                                sf::RenderStates states) const {}
 
-void GameInfoPanel::handleEventCurrent(sf::Event &event) {}
+MainGamePanel::MainGamePanel(int width, int height) : Panel(width, height) {
 
-MainGamePanel::MainGamePanel(int width, int height)
-    : Panel(width, height), world_(width * ratio, height) {
+  LOG("HELLO");
+  std::unique_ptr<WorldWrapperPanel> worldPanel =
+      std::make_unique<WorldWrapperPanel>(width * ratio, height);
+  LOG("HELLO");
+  std::unique_ptr<GameInfoPanel> infoPanel =
+      std::make_unique<GameInfoPanel>(width * (1 - ratio), height);
 
-  std::unique_ptr<HelperGamePanel> helperPanel =
-      std::make_unique<HelperGamePanel>(sf::Vector2i(width * ratio, height),
-                                        this);
-  helperPanel->setWorld(&world_);
-  std::unique_ptr<GameInfoPanel> infoPanel = std::make_unique<GameInfoPanel>(
-      sf::Vector2i(width * (1 - ratio), height), this);
-  infoPanel->setWorld(&world_);
   infoPanel->move(sf::Vector2f(width * ratio, 0));
-  children_.push_back(std::move(helperPanel));
-  children_.push_back(std::move(infoPanel));
+  this->attachChild(std::move(worldPanel));
+  this->attachChild(std::move(infoPanel));
+  LOG("HELLO");
 }
 
 MainGamePanel::MainGamePanel(sf::Vector2i size)

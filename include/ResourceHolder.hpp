@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace heroes {
 
@@ -23,12 +24,12 @@ template <typename I, class R>
 void ResourceHolder<I, R>::load(const I &id, const std::string &filename) {
   std::unique_ptr<R> res = std::make_unique<R>();
   res->loadFromFile(filename);
-  map_.emplace(id, std::move(res));
+  set(id, std::move(res));
 }
 
 template <typename I, class R>
 void ResourceHolder<I, R>::set(const I &id, std::unique_ptr<R> res) {
-  map_.empalce(id, std::move(res));
+  map_.emplace(id, std::move(res));
 }
 
 template <typename I, class R> R &ResourceHolder<I, R>::get(const I &id) {
@@ -39,5 +40,26 @@ template <typename I, class R>
 const R &ResourceHolder<I, R>::get(const I &id) const {
   return *map_[id];
 }
+
+struct GifHolder {
+  GifHolder() = default;
+
+  void loadFromFiles(const std::vector<std::string> &filenames) {
+    for (const auto &filename : filenames) {
+      textures_.emplace_back();
+      textures_.back().loadFromFile(filename);
+    }
+  }
+  std::vector<sf::Sprite> getAsSprites() const {
+    std::vector<sf::Sprite> result;
+    for (const auto &tex : textures_) {
+      result.emplace_back(tex);
+    }
+    return result;
+  }
+
+private:
+  std::vector<sf::Texture> textures_;
+};
 
 } // namespace heroes
