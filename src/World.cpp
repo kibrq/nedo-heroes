@@ -1,4 +1,5 @@
 #include "World.h"
+#include "GameState.h"
 #include "Hero.h"
 #include "Logger.hpp"
 #include "Player.h"
@@ -10,14 +11,6 @@
 
 namespace heroes {
 
-SimpleEntity::SimpleEntity(sf::Vector2i location) : location_{location} {}
-
-void SimpleEntity::setLocation(sf::Vector2i loc) { location_ = loc; }
-sf::Vector2i SimpleEntity::getLocation() const { return location_; }
-
-Entity::Entity(sf::Vector2i location, World &world)
-    : SimpleEntity(location), world_{world} {}
-
 World::Tile::Tile(const sf::Texture &texture, sf::Vector2i location,
                   World &world)
     : sprite_{texture}, Entity(location, world) {}
@@ -27,7 +20,21 @@ void World::Tile::drawCurrent(sf::RenderTarget &target,
   target.draw(sprite_, states);
 }
 
-World::World() {
+const Visitable *World::Tile::getVisitable() const { return visitable_; }
+void World::Tile::setVisitable(Visitable *visitable) { visitable_ = visitable; }
+
+void World::Tile::heroVisited(Hero *hero) {
+  if (visitable_) {
+    visitable_->heroVisited(hero);
+  }
+}
+
+sf::Vector2f World::SceneTile::getCenter() const {
+  return sf::Vector2f(ethalonDistance / 2.f, ethalonDistance / 2.f);
+}
+
+World::World(GameView &view, GameState &gameState)
+    : StateRequestable(gameState), view_{view} {
   buildScene();
   buildGraph();
 }
@@ -86,7 +93,7 @@ void World::buildScene() {
           std::make_unique<Tile>(textures::BackgroundResourcesHolder().get(
                                      textures::BackgroundKinds::Grass1),
                                  sf::Vector2i(x, y), *this);
-      auto stile = std::make_unique<SceneNode>();
+      auto stile = std::make_unique<SceneTile>();
       if (x != 0) {
         btile->setPosition(sf::Vector2f(ethalonDistance, 0)),
             stile->setPosition(sf::Vector2f(ethalonDistance, 0));
@@ -107,15 +114,16 @@ void World::buildScene() {
     }
   }
 
-  auto player1 = std::make_unique<Player>();
-  auto hero1 = std::make_unique<Hero>(textures::HeroKinds::Cowboy,
+  auto player1 = std::make_unique<Player>(PlayerKinds::Red);
+
+  auto hero1 = std::make_unique<Hero>(HeroKinds::Cowboy, player1->getKind(),
                                       sf::Vector2i(1, 3), *this);
   auto heroPtr1 = hero1.get();
   player1->addHero(std::move(heroPtr1));
   sceneTiles_[toID(1, 3)]->attachChild(std::move(hero1));
 
-  auto player2 = std::make_unique<Player>();
-  auto hero2 = std::make_unique<Hero>(textures::HeroKinds::Cowboy,
+  auto player2 = std::make_unique<Player>(PlayerKinds::Blue);
+  auto hero2 = std::make_unique<Hero>(HeroKinds::Cowboy, player2->getKind(),
                                       sf::Vector2i(5, 1), *this);
   auto heroPtr2 = hero2.get();
   player2->addHero(std::move(heroPtr2));
@@ -123,6 +131,10 @@ void World::buildScene() {
 
   players_.push_back(std::move(player1));
   players_.push_back(std::move(player2));
+
+  auto town = std::make_unique<Town>(TownKinds::Castle, PlayerKinds::Red,
+                                     sf::Vector2i(1, 1), *this);
+  sceneTiles_[toID(1, 1)]->attachChild(std::move(town));
 
   choosenHero_ = heroPtr1;
 }
@@ -148,15 +160,13 @@ void World::buildGraph() {
 }
 
 void World::addNode(std::unique_ptr<SceneNode> node, sf::Vector2i position) {
-  struct Adder : Command {
+  struct Adder : TypeSpecifiedCommand<World> {
     Adder(std::unique_ptr<SceneNode> node, sf::Vector2i position)
         : node_{std::move(node)}, position_{position} {}
     std::unique_ptr<SceneNode> node_;
     sf::Vector2i position_;
-    void operator()(SceneNode *node, sf::Time dt) {
-      if (World *world = dynamic_cast<World *>(node); world) {
-        world->forceAddNode(std::move(node_), position_);
-      }
+    void typeSpecifiedAction(World *world, sf::Time dt) {
+      world->forceAddNode(std::move(node_), position_);
     }
   };
   commands_.push(std::make_unique<Adder>(std::move(node), position));
@@ -169,11 +179,9 @@ void World::forceAddNode(std::unique_ptr<SceneNode> node,
 
 void World::removeNode(const SceneNode *node, sf::Vector2i position) {
 
-  commands_.push(std::make_unique<SimpleCommand>(
-      [node = node, position = position](SceneNode *scene, sf::Time dt) {
-        if (World *world = dynamic_cast<World *>(scene); world) {
-          world->forceRemoveNode(node, position);
-        }
+  commands_.push(std::make_unique<CopyableTypeSpecifiedCommand<World>>(
+      [node = node, position = position](World *world, sf::Time dt) {
+        world->forceRemoveNode(node, position);
       }));
 }
 
@@ -192,13 +200,11 @@ void World::updateCurrent(sf::Time dt) {
 }
 
 void World::moveHero(Hero *hero, sf::Vector2i position) {
-  commands_.push(std::make_unique<SimpleCommand>(
-      [hero = hero, position = position](SceneNode *scene, sf::Time dt) {
-        if (World *world = dynamic_cast<World *>(scene); world) {
-          world->forceAddNode(world->forceRemoveNode(hero, hero->getLocation()),
-                              position);
-          hero->setLocation(position);
-        }
+  commands_.push(std::make_unique<CopyableTypeSpecifiedCommand<World>>(
+      [this, hero = hero, position = position](World *world, sf::Time dt) {
+        world->forceAddNode(world->forceRemoveNode(hero, hero->getLocation()),
+                            position);
+        hero->setLocation(position);
       }));
 }
 
@@ -208,7 +214,9 @@ void World::nextTurn() {
   }
   ++currentPlayerNum_, currentPlayerNum_ %= players_.size();
   choosenHero_ = players_[currentPlayerNum_]->getFirstHeroOrNull();
+  requestStackPush(States::BetweenTurns);
   if (choosenHero_) {
+    setFocus(choosenHero_->getLocation());
     choosenHero_->toggleHide();
   }
 }
@@ -218,6 +226,7 @@ void World::handleLeftClick(sf::Vector2i position) {
     return;
   }
   auto destination = choosenHero_->backOfPath();
+
   if (destination.has_value() && position == *destination) {
     choosenHero_->startMoving();
   } else {
@@ -226,56 +235,30 @@ void World::handleLeftClick(sf::Vector2i position) {
   }
 }
 
-WorldWrapperPanel::WorldWrapperPanel(int width, int height)
-    : Panel(width, height) {}
-
-WorldWrapperPanel::WorldWrapperPanel(sf::Vector2i size) : Panel(size) {}
-
-void WorldWrapperPanel::drawCurrent(sf::RenderTarget &target,
-                                    sf::RenderStates states) const {
-  target.draw(world_, states);
+void World::setFocus(sf::Vector2i location) {
+  view_.setCenter(sf::Vector2f(location * ethalonDistance));
 }
 
-void WorldWrapperPanel::updateCurrent(sf::Time dt) { world_.update(dt); }
+void World::moveFocus(sf::Vector2f delta) { view_.move(delta); }
 
-bool WorldWrapperPanel::handleMouseButtonClickedCurrent(
-    sf::Mouse::Button button, sf::Vector2i position) {
-  if (button == sf::Mouse::Left) {
-    world_.handleLeftClick(normalizeVector(position));
-  }
-  return true;
+GameView::GameView(sf::Vector2i targetDimension, sf::FloatRect viewport)
+    : offset_{0, 0} {
+  float width = targetDimension.x * viewport.width;
+  float height = targetDimension.y * viewport.height;
+  reset(sf::FloatRect(0, 0, width, height));
+  setViewport(viewport);
 }
 
-bool WorldWrapperPanel::handleKeyPressedCurrent(sf::Keyboard::Key key) {
-  static const float ds = 1.005;
-  static sf::Vector2f dscaleUp{ds, ds};
-  static sf::Vector2f dscaleDown{1 / ds, 1 / ds};
-  switch (key) {
-  case sf::Keyboard::Z:
-    world_.scale(dscaleUp);
-    return false;
-  case sf::Keyboard::C:
-    world_.scale(dscaleDown);
-    return false;
-  }
-  return true;
+sf::Vector2f GameView::getOffset() const { return offset_; }
+
+void GameView::setCenter(sf::Vector2f center) {
+  sf::View::setCenter(center);
+  offset_ = center - sf::View::getSize() / 2.f;
 }
 
-bool WorldWrapperPanel::handleKeyClickedCurrent(sf::Keyboard::Key key) {
-  switch (key) {
-  case sf::Keyboard::E:
-    world_.nextTurn();
-    return false;
-  }
-  return true;
-}
-
-sf::Vector2i WorldWrapperPanel::normalizeVector(sf::Vector2i v) const {
-  sf::Vector2f vf{v};
-  vf -= world_.getPosition() + getPosition();
-  vf.x /= ethalonDistance * world_.getScale().x,
-      vf.y /= ethalonDistance * world_.getScale().y;
-  return sf::Vector2i(vf);
+void GameView::move(sf::Vector2f delta) {
+  sf::View::move(delta);
+  offset_ += delta;
 }
 
 } // namespace heroes

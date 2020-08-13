@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AbstractCore.h"
+#include "GameObjectsCore.h"
 #include <SFML/Graphics.hpp>
 #include <deque>
 #include <unordered_map>
@@ -12,41 +13,56 @@ constexpr int ethalonDistance{100};
 class World;
 class Player;
 class Hero;
+class GameState;
 
-struct SimpleEntity : SceneNode {
-  SimpleEntity(sf::Vector2i loaction);
-  sf::Vector2i getLocation() const;
-  void setLocation(sf::Vector2i);
+struct GameView : sf::View {
+  GameView(sf::Vector2i windowDimension, sf::FloatRect viewport);
 
-protected:
-  sf::Vector2i location_;
-};
+  void setCenter(sf::Vector2f center);
+  void move(sf::Vector2f delta);
 
-struct Entity : SimpleEntity {
-  Entity(sf::Vector2i location, World &world);
-
-protected:
-  World &world_;
-};
-
-class World final : public SceneNode {
+  sf::Vector2f getOffset() const;
 
 private:
-  struct Tile : Entity {
+  sf::Vector2f offset_;
+};
+
+class World final : public SceneNode, public StateRequestable<GameState> {
+
+private:
+  struct Tile : Entity, Visitable {
     Tile(const sf::Texture &texture, sf::Vector2i loc, World &world);
 
   private:
     void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
+    sf::Sprite sprite_;
+
+  public:
+    void setVisitable(Visitable *visitable);
+    const Visitable *getVisitable() const;
+
+    void heroVisited(Hero *hero);
 
   private:
-    sf::Sprite sprite_;
+    Visitable *visitable_{nullptr};
+  };
+
+  struct SceneTile : SceneNode {
+    SceneTile() = default;
+
+  private:
+    sf::Vector2f getCenter() const override;
   };
 
 public:
-  World();
+  World(GameView &, GameState &);
   ~World();
 
+  void setFocus(sf::Vector2i location);
+  void moveFocus(sf::Vector2f delta);
+
 private:
+  GameView &view_;
   void buildScene();
 
   enum class Layer : std::size_t { Background = 0, Surface = 1, Count = 2 };
@@ -58,10 +74,10 @@ private:
   std::size_t toID(int x, int y);
   sf::Vector2i fromID(std::size_t);
 
-  std::vector<SceneNode *> sceneTiles_;
+  std::vector<SceneTile *> sceneTiles_;
   std::vector<Tile *> tiles_;
 
-  sf::Vector2i mapSize_{12, 6};
+  sf::Vector2i mapSize_{20, 20};
 
   void buildGraph();
   std::vector<std::vector<std::size_t>> mapGraph_;
@@ -87,37 +103,18 @@ private:
 public:
   void nextTurn();
   void addNode(std::unique_ptr<SceneNode>, sf::Vector2i position);
-  void forceAddNode(std::unique_ptr<SceneNode>, sf::Vector2i position);
   void removeNode(const SceneNode *, sf::Vector2i position);
+  void moveHero(Hero *hero, sf::Vector2i newPosition);
+
+private:
+  void forceAddNode(std::unique_ptr<SceneNode>, sf::Vector2i position);
   std::unique_ptr<SceneNode> forceRemoveNode(const SceneNode *,
                                              sf::Vector2i position);
-  void moveHero(Hero *hero, sf::Vector2i newPosition);
 
 public:
   void handleLeftClick(sf::Vector2i position);
   void handleRightPress(sf::Vector2i position);
   void handleRightRelease(sf::Vector2i position);
-};
-
-struct WorldWrapperPanel final : public Panel {
-  WorldWrapperPanel(int width, int height);
-  WorldWrapperPanel(sf::Vector2i size);
-
-private:
-  void drawCurrent(sf::RenderTarget &, sf::RenderStates) const override;
-  void updateCurrent(sf::Time dt) override;
-
-private:
-  bool handleMouseButtonClickedCurrent(sf::Mouse::Button,
-                                       sf::Vector2i position) override;
-  bool handleKeyPressedCurrent(sf::Keyboard::Key) override;
-  bool handleKeyClickedCurrent(sf::Keyboard::Key) override;
-
-private:
-  sf::Vector2i normalizeVector(sf::Vector2i) const;
-
-private:
-  World world_;
 };
 
 } // namespace heroes

@@ -4,6 +4,69 @@
 
 namespace heroes {
 
+SceneNode::~SceneNode() {}
+
+void SceneNode::attachChild(std::unique_ptr<SceneNode> node) {
+  node->setParent(this);
+  children_.push_back(std::move(node));
+}
+
+std::unique_ptr<SceneNode> SceneNode::detachChild(const SceneNode *node) {
+  auto iter = std::find_if(children_.begin(), children_.end(),
+                           [node](auto &child) { return child.get() == node; });
+  auto result{std::move(*iter)};
+  children_.erase(iter);
+  return result;
+}
+
+std::unique_ptr<SceneNode> SceneNode::detachFromParent() {
+  assert(parent_);
+  return parent_->detachChild(this);
+}
+
+const SceneNode *SceneNode::getParent() const { return parent_; }
+
+void SceneNode::setParent(SceneNode *parent) {
+  parent_ = parent;
+  onSetParent();
+}
+
+void SceneNode::onSetParent() {}
+
+sf::Vector2f SceneNode::getCenter() const { return sf::Vector2f(0, 0); }
+
+void SceneNode::update(sf::Time dt) {
+  updateCurrent(dt);
+  for (const auto &ch : children_) {
+    ch->update(dt);
+  }
+}
+
+void SceneNode::updateCurrent(sf::Time dt) {}
+
+void SceneNode::draw(sf::RenderTarget &target, sf::RenderStates states) const {
+  states.transform *= getTransform();
+  drawCurrent(target, states);
+  for (const auto &ch : children_) {
+    ch->draw(target, states);
+  }
+}
+
+void SceneNode::drawCurrent(sf::RenderTarget &target,
+                            sf::RenderStates states) const {}
+
+sf::Transform SceneNode::getAbsoluteTransform() const {
+  sf::Transform result = sf::Transform::Identity;
+  for (const auto *current = this; current != nullptr; current = getParent()) {
+    result *= current->getTransform();
+  }
+  return result;
+}
+
+sf::Vector2f SceneNode::getAbsolutePosition() const {
+  return sf::Vector2<float>(getAbsoluteTransform() * sf::Vector2f());
+}
+
 void SceneNode::onCommand(Command *command, sf::Time dt) {
   command->doAction(this, dt);
   for (auto &child : children_) {
@@ -48,99 +111,12 @@ void Animation::reset() {
 void Animation::resume() { isStopped = false; }
 
 void Animation::draw(sf::RenderTarget &target, sf::RenderStates states) const {
+  if (frames_.empty()) {
+    return;
+  }
   target.draw(frames_[currentFrame_], states);
 }
 
-Panel::Panel(int width, int height) : Panel(sf::Vector2i(width, height)) {}
-Panel::Panel(sf::Vector2i size) : size_{size} {}
-
-#define HANDLE_MOUSE_BUTTON(NAME)                                              \
-  bool Panel::handleMouseButton##NAME(sf::Mouse::Button button,                \
-                                      sf::Vector2i position) {                 \
-    if (!isInBounds(position)) {                                               \
-      return true;                                                             \
-    }                                                                          \
-    if (!handleMouseButton##NAME##Current(button, position)) {                 \
-      return false;                                                            \
-    }                                                                          \
-    for (auto &child : children_) {                                            \
-      if (child->handleMouseButton##NAME(button, position)) {                  \
-        return false;                                                          \
-      }                                                                        \
-    }                                                                          \
-    return true;                                                               \
-  }
-
-HANDLE_MOUSE_BUTTON(Clicked)
-HANDLE_MOUSE_BUTTON(Pressed)
-HANDLE_MOUSE_BUTTON(Released)
-
-bool Panel::handleMouseWheelScrolled(int delta, sf::Vector2i position) {
-  if (!isInBounds(position)) {
-    return true;
-  }
-  if (!handleMouseWheelScrolledCurrent(delta, position)) {
-    return false;
-  }
-  for (auto &child : children_) {
-    if (child->handleMouseWheelScrolled(delta, position)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool Panel::handleMouseMoved(sf::Vector2i position) {
-  if (!isInBounds(position)) {
-    return true;
-  }
-  if (!handleMouseMovedCurrent(position)) {
-    return false;
-  }
-  for (auto &child : children_) {
-    if (child->handleMouseMoved(position)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-#define HANDLE_KEY(NAME)                                                       \
-  bool Panel::handleKey##NAME(sf::Keyboard::Key key) {                         \
-    if (!handleKey##NAME##Current(key)) {                                      \
-      return false;                                                            \
-    }                                                                          \
-    for (auto &child : children_) {                                            \
-      if (child->handleKey##NAME(key)) {                                       \
-        return false;                                                          \
-      }                                                                        \
-    }                                                                          \
-    return true;                                                               \
-  }
-
-HANDLE_KEY(Clicked)
-HANDLE_KEY(Pressed)
-HANDLE_KEY(Released)
-
-sf::Vector2i Panel::getRelativePosition(int x, int y) const {
-  return getRelativePosition(sf::Vector2i(x, y));
-}
-
-sf::Vector2i Panel::getRelativePosition(sf::Vector2i v) const {
-  return v - getAbsolutePosition();
-}
-
-bool Panel::isInBounds(int x, int y) const {
-  return isInBounds(sf::Vector2i(x, y));
-}
-
-bool Panel::isInBounds(sf::Vector2i absolutePosition) const {
-  auto relativePosition = getRelativePosition(absolutePosition);
-  auto isInRange = [](auto left, auto right, auto test) {
-    return left <= test && test < right;
-  };
-  return isInRange(0, size_.x, relativePosition.x) &&
-         isInRange(0, size_.y, relativePosition.y);
-}
-
 } // namespace heroes
+
+// namespace heroes

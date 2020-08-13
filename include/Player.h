@@ -1,20 +1,26 @@
 #pragma once
-#include "Hero.h"
+
+#include <vector>
 
 namespace heroes {
 
+enum class PlayerKinds { None, Red, Blue };
+
+class Hero;
+
 class Player {
 public:
-  static std::size_t counter;
-  static std::size_t getCounter() { return ++counter; }
-  static void resetCounter() { counter = 0; }
+  Player(PlayerKinds kind);
 
-public:
-  void addHero(Hero *hero);
-  void removeHero(Hero *hero);
+  void addHero(Hero *);
+  void removeHero(Hero *);
+
   Hero *getFirstHeroOrNull();
 
+  PlayerKinds getKind() const;
+
 private:
+  PlayerKinds kind_;
   std::size_t id_;
   std::vector<Hero *> heroes_;
 };

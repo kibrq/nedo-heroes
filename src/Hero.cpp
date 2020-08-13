@@ -1,25 +1,28 @@
 #include "Hero.h"
 #include "Logger.hpp"
+#include "Textures.h"
 #include "World.h"
 #include <cassert>
 
 namespace heroes {
 
-Hero::Hero(textures::HeroKinds kind, sf::Vector2i location, World &world)
-    : Entity(location, world), moveEast_(sf::Time(sf::milliseconds(100))),
-      moveWest_(sf::Time(sf::milliseconds(100))) {
-  auto &res = textures::HeroResourcesHolder().get(kind);
-  moveEast_.init(res, textures::MoveEast);
-  moveWest_.init(res, textures::MoveWest);
+Hero::Hero(HeroKinds kind, PlayerKinds owner, sf::Vector2i location,
+           World &world)
+    : OwnableEntity(owner, location, world),
+      moveEast_(kind, HeroMovingAnimationKinds::MoveEast,
+                sf::Time(sf::milliseconds(100))),
+      moveWest_(kind, HeroMovingAnimationKinds::MoveWest,
+                sf::Time(sf::milliseconds(100))) {
   currentAnimation_ = &moveWest_;
 }
 
-Hero::HeroMovingAnimation::HeroMovingAnimation(sf::Time duration)
-    : Animation(duration, true) {}
-
-void Hero::HeroMovingAnimation::init(textures::HeroResources &res,
-                                     textures::HeroGifKinds kind) {
-  frames_ = res.gifs_.get(kind).getAsSprites();
+Hero::HeroMovingAnimation::HeroMovingAnimation(
+    HeroKinds heroKind, HeroMovingAnimationKinds animKind, sf::Time duration)
+    : Animation(duration, true) {
+  frames_ = textures::HeroResourcesHolder()
+                .get(heroKind)
+                .animations_.get(animKind)
+                .getAsSprites();
 }
 
 void Hero::setLocation(sf::Vector2i location) {
@@ -37,6 +40,7 @@ void Hero::updateCurrent(sf::Time dt) {
     return;
   }
   move(sf::Vector2f(path_->direction()));
+  world_.moveFocus(sf::Vector2f(path_->direction()));
   if (currentAnimation_->update(dt)) {
     world_.moveHero(this, path_->front());
     path_->pop();
@@ -75,6 +79,7 @@ void Hero::startMoving() {
     path_->pop();
   }
   chooseAnimationByDirection(path_->direction());
+  world_.setFocus(location_);
 }
 
 void Hero::stopMoving() {

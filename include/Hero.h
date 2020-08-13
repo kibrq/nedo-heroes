@@ -1,21 +1,24 @@
 #pragma once
 
 #include "AbstractCore.h"
-#include "Textures.h"
-#include "World.h"
+#include "GameObjectsCore.h"
 #include <SFML/Graphics.hpp>
 #include <deque>
 
 namespace heroes {
 
-class Hero : public Entity {
+enum class HeroKinds { Cowboy };
+enum class HeroMovingAnimationKinds { MoveEast, MoveWest };
+
+class Hero : public OwnableEntity {
 public:
-  Hero(textures::HeroKinds kind, sf::Vector2i, World &);
+public:
+  Hero(HeroKinds heroKind, PlayerKinds owner, sf::Vector2i location, World &);
 
 private:
   struct HeroMovingAnimation : Animation {
-    HeroMovingAnimation(sf::Time duration);
-    void init(textures::HeroResources &, textures::HeroGifKinds kind);
+    HeroMovingAnimation(HeroKinds heroKind, HeroMovingAnimationKinds animKind,
+                        sf::Time duration);
   };
   HeroMovingAnimation moveEast_, moveWest_;
   HeroMovingAnimation *currentAnimation_;

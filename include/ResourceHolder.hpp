@@ -41,13 +41,14 @@ const R &ResourceHolder<I, R>::get(const I &id) const {
   return *map_[id];
 }
 
-struct GifHolder {
-  GifHolder() = default;
+struct TextureArray {
+  TextureArray() = default;
 
   void loadFromFiles(const std::vector<std::string> &filenames) {
+    textures_.resize(filenames.size());
+    std::size_t i = 0;
     for (const auto &filename : filenames) {
-      textures_.emplace_back();
-      textures_.back().loadFromFile(filename);
+      textures_[i++].loadFromFile(filename);
     }
   }
   std::vector<sf::Sprite> getAsSprites() const {
